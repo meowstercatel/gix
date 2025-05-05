@@ -1,25 +1,43 @@
 package main
 
 import (
+	"encoding/json"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"os"
 )
 
-type repo struct {
+type Repo struct {
+	Author string `json:"author"`
+
 	Name    string   `json:"name"`
-	Commits []commit `json:"commits"`
+	Commits []Commit `json:"commits"`
 }
 
-type commit struct {
+type Commit struct {
 	Message     string `json:"message"`
 	ZipLocation string `json:"zip_location"`
 	Author      string `json:"author"`
 }
 
+func initRepo(name string, location string) Repo {
+	repo := Repo{
+		Name: name,
+	}
+	jsonRepo, err := json.Marshal(repo)
+	if os.WriteFile(location+"/repo.json", jsonRepo, 0644) != nil {
+		panic(err)
+	}
+	if err != nil {
+		panic(err)
+	}
+	return Repo{}
+}
+
 func main() {
 	a := app.New()
-	w := a.NewWindow("Hello")
+	w := a.NewWindow("gix")
 
 	hello := widget.NewLabel("Hello Fyne!")
 	w.SetContent(container.NewVBox(
