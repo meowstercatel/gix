@@ -9,10 +9,19 @@ import (
 )
 
 type Repo struct {
-	Author string `json:"author"`
-
+	Author  string   `json:"author"`
 	Name    string   `json:"name"`
 	Commits []Commit `json:"commits"`
+}
+
+func (r Repo) save(location string) {
+	jsonRepo, err := json.Marshal(r)
+	if err != nil {
+		panic(err)
+	}
+	if os.WriteFile(location+"/repo.json", jsonRepo, 0644) != nil {
+		panic(err)
+	}
 }
 
 type Commit struct {
@@ -25,14 +34,8 @@ func initRepo(name string, location string) Repo {
 	repo := Repo{
 		Name: name,
 	}
-	jsonRepo, err := json.Marshal(repo)
-	if os.WriteFile(location+"/repo.json", jsonRepo, 0644) != nil {
-		panic(err)
-	}
-	if err != nil {
-		panic(err)
-	}
-	return Repo{}
+	repo.save(location)
+	return repo
 }
 
 func main() {
