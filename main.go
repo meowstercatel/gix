@@ -9,6 +9,9 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 )
 
 var repo Repo
@@ -62,6 +65,37 @@ func InitRepo(name string, location string) Repo {
 	return repo
 }
 
+func CreateCommit(message string) {
+	files, _ := os.ReadDir(repo.Location)
+	counter := 0
+	for _, f := range files {
+		name := strings.Split(f.Name(), ".")[0]
+		nameInt, _ := strconv.Atoi(name)
+		if nameInt > counter {
+			counter = nameInt
+		}
+	}
+	lastFullTar := counter - counter%5
+	counter++ //this line is important because we don't want to overwrite the last tarball
+	tarName := strconv.Itoa(counter) + ".tar.gz"
+	tar := exec.Command("tar",
+		"-czvf",
+		tarName,
+		"--listed-incremental=.gix/"+strconv.Itoa(lastFullTar)+".snar",
+		"~",
+	)
+	tar.Dir = repo.Location
+	if err := tar.Run(); err != nil {
+		panic(err)
+	}
+	commit := Commit{
+		Message:     message,
+		ZipLocation: tarName, //incremental tarball file name
+		Author:      "",
+	}
+	repo.AddCommit(commit)
+}
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("gix")
@@ -72,13 +106,7 @@ func main() {
 	w.SetContent(container.NewVBox(
 		commitMessage,
 		widget.NewButton("commit", func() {
-			commit := Commit{
-				Message:     commitMessage.Text,
-				ZipLocation: "", //zip diff location
-				Author:      "",
-			}
-			repo.AddCommit(commit)
-			repo.Save()
+			CreateCommit(commitMessage.Text)
 		}),
 		widget.NewButton("init repo", func() {
 			folderDialog := dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
