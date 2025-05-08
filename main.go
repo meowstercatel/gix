@@ -96,6 +96,27 @@ func CreateCommit(message string) {
 	repo.AddCommit(commit)
 }
 
+func Push() {
+    lastCommit := repo.Commits[len(repo.Commits) - 1]
+
+    file, err := os.ReadFile(lastCommit.ZipLocation)
+    if err != nil {
+        panic(err)
+    }
+
+    client := resty.New()
+    defer client.Close()
+
+    res, err := client.R().
+        SetBody(Commit{
+                Message:     lastCommit.Message,
+            ZipLocation: file,
+            Author:      lastCommit.Author,
+            }).
+            EnableTrace().
+            Post(settings.Server)
+}
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("gix")
