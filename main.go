@@ -79,7 +79,7 @@ func CreateCommit(message string) {
 	counter++ //this line is important because we don't want to overwrite the last tarball
 	tarName := strconv.Itoa(counter) + ".tar.gz"
 	tar := exec.Command("tar",
-		"-czvf",
+		"-cvf",
 		tarName,
 		"--listed-incremental=.gix/"+strconv.Itoa(lastFullTar)+".snar",
 		"~",
