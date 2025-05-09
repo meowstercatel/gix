@@ -16,6 +16,12 @@ import (
 
 var repo Repo
 
+var settings Settings
+
+type Settings struct {
+ Server string `json:"server"`
+}
+
 type Commit struct {
 	Message     string `json:"message"`
 	ZipLocation string `json:"zip_location"`
