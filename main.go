@@ -8,10 +8,13 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"net/url"
 	"os"
 	"os/exec"
+	"resty.dev/v3"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var repo Repo
@@ -19,13 +22,14 @@ var repo Repo
 var settings Settings
 
 type Settings struct {
- Server string `json:"server"`
+	Server string `json:"server"`
 }
 
 type Commit struct {
 	Message     string `json:"message"`
 	ZipLocation string `json:"zip_location"`
 	Author      string `json:"author"`
+	Date        int64  `json:"date"`
 }
 
 type Repo struct {
@@ -40,21 +44,21 @@ func (r *Repo) Save() {
 	if err != nil {
 		panic(err)
 	}
-	if os.WriteFile(r.Location+"/repo.json", jsonRepo, 0644) != nil {
+	if os.WriteFile(r.Location+"/.gix/repo.json", jsonRepo, 0644) != nil {
 		panic(err)
 	}
 }
 
-func LoadRepo(location string) Repo {
+func LoadRepo(location string) bool {
 	r := Repo{}
-	jsonRepo, err := os.ReadFile(location + "/repo.json")
+	jsonRepo, err := os.ReadFile(location + "/.gix/repo.json")
 	if err != nil {
-		panic(err)
+		return false
 	}
 	if json.Unmarshal(jsonRepo, &r) != nil {
-		panic(err)
+		return false
 	}
-	return r
+	return true
 }
 
 func (r *Repo) AddCommit(commit Commit) {
@@ -62,13 +66,13 @@ func (r *Repo) AddCommit(commit Commit) {
 	r.Save()
 }
 
-func InitRepo(name string, location string) Repo {
+func InitRepo(name string, location string) bool {
 	repo = Repo{
 		Name:     name,
 		Location: location,
 	}
 	repo.Save()
-	return repo
+	return true
 }
 
 func CreateCommit(message string) {
@@ -98,29 +102,34 @@ func CreateCommit(message string) {
 		Message:     message,
 		ZipLocation: tarName, //incremental tarball file name
 		Author:      "",
+		Date:        time.Now().Unix(),
 	}
 	repo.AddCommit(commit)
 }
 
 func Push() {
-    lastCommit := repo.Commits[len(repo.Commits) - 1]
+	lastCommit := repo.Commits[len(repo.Commits)-1]
 
-    file, err := os.ReadFile(lastCommit.ZipLocation)
-    if err != nil {
-        panic(err)
-    }
+	file, err := os.ReadFile(lastCommit.ZipLocation)
+	if err != nil {
+		panic(err)
+	}
 
-    client := resty.New()
-    defer client.Close()
+	client := resty.New()
+	defer client.Close()
 
-    res, err := client.R().
-        SetBody(Commit{
-                Message:     lastCommit.Message,
-            ZipLocation: file,
-            Author:      lastCommit.Author,
-            }).
-            EnableTrace().
-            Post(settings.Server)
+	//implementing this server-side is going to be tricky
+	//we should also send the incremental file (.snar) but i'll leave that to someone else
+	_, err = client.R().
+		SetBody(file).
+		SetHeaders(map[string]string{
+			"Content-Type": "application/octet-stream",
+			"Author":       "",
+		}).
+		Post(settings.Server)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func main() {
@@ -135,10 +144,11 @@ func main() {
 		widget.NewButton("commit", func() {
 			CreateCommit(commitMessage.Text)
 		}),
-		widget.NewButton("init repo", func() {
+		widget.NewButton("open/init repo", func() {
 			folderDialog := dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
-				fmt.Println(uri)
-				InitRepo(uri.Name(), uri.Path())
+				if !LoadRepo(uri.Path()) {
+					InitRepo(uri.Name(), uri.Path())
+				}
 			}, w)
 			folderDialog.Show()
 		}),
