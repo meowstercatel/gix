@@ -2,13 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"net/url"
 	"os"
 	"os/exec"
 	"resty.dev/v3"
@@ -58,6 +56,7 @@ func LoadRepo(location string) bool {
 	if json.Unmarshal(jsonRepo, &r) != nil {
 		return false
 	}
+	repo = r
 	return true
 }
 
@@ -137,9 +136,14 @@ func main() {
 	w := a.NewWindow("gix")
 
 	commitMessage := widget.NewEntry()
+	loadedRepo := widget.NewLabel("")
 
 	w.Resize(fyne.NewSize(800, 600))
 	w.SetContent(container.NewVBox(
+		container.NewVBox(
+			widget.NewLabel("Loaded repo: "),
+			loadedRepo,
+		),
 		commitMessage,
 		widget.NewButton("commit", func() {
 			CreateCommit(commitMessage.Text)
@@ -149,8 +153,12 @@ func main() {
 				if !LoadRepo(uri.Path()) {
 					InitRepo(uri.Name(), uri.Path())
 				}
+				loadedRepo.SetText(repo.Name)
 			}, w)
 			folderDialog.Show()
+		}),
+		widget.NewButton("push", func() {
+			Push()
 		}),
 	))
 
