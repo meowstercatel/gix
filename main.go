@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -122,10 +123,13 @@ func Push() {
 	_, err = client.R().
 		SetBody(file).
 		SetHeaders(map[string]string{
-			"Content-Type": "application/octet-stream",
-			"Author":       "",
+			"Authorization": "",
+			"Content-Type":  "application/octet-stream",
+			"Author":        "",
+			"Repo":          fmt.Sprintf("%s/%s", repo.Author, repo.Name),
+			"Filename":      lastCommit.ZipLocation,
 		}).
-		Post(settings.Server)
+		Post(settings.Server + "/push")
 	if err != nil {
 		panic(err)
 	}
