@@ -1,170 +1,145 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"log"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"os"
-	"os/exec"
-	"resty.dev/v3"
-	"strconv"
-	"strings"
-	"time"
 )
 
-var repo Repo
-
-var settings Settings
-
-type Settings struct {
-	Server string `json:"server"`
-}
-
-type Commit struct {
-	Message     string `json:"message"`
-	ZipLocation string `json:"zip_location"`
-	Author      string `json:"author"`
-	Date        int64  `json:"date"`
-}
-
-type Repo struct {
-	Author   string   `json:"author"`
-	Name     string   `json:"name"`
-	Commits  []Commit `json:"commits"`
-	Location string
-}
-
-func (r *Repo) Save() {
-	jsonRepo, err := json.Marshal(r)
-	if err != nil {
-		panic(err)
-	}
-	if os.WriteFile(r.Location+"/.gix/repo.json", jsonRepo, 0644) != nil {
-		panic(err)
-	}
-}
-
-func LoadRepo(location string) bool {
-	r := Repo{}
-	jsonRepo, err := os.ReadFile(location + "/.gix/repo.json")
-	if err != nil {
-		return false
-	}
-	if json.Unmarshal(jsonRepo, &r) != nil {
-		return false
-	}
-	repo = r
-	return true
-}
-
-func (r *Repo) AddCommit(commit Commit) {
-	r.Commits = append(r.Commits, commit)
-	r.Save()
-}
-
-func InitRepo(name string, location string) bool {
-	repo = Repo{
-		Name:     name,
-		Location: location,
-	}
-	repo.Save()
-	return true
-}
-
-func CreateCommit(message string) {
-	files, _ := os.ReadDir(repo.Location)
-	counter := 0
-	for _, f := range files {
-		name := strings.Split(f.Name(), ".")[0]
-		nameInt, _ := strconv.Atoi(name)
-		if nameInt > counter {
-			counter = nameInt
-		}
-	}
-	lastFullTar := counter - counter%5
-	counter++ //this line is important because we don't want to overwrite the last tarball
-	tarName := strconv.Itoa(counter) + ".tar.gz"
-	tar := exec.Command("tar",
-		"-cvf",
-		tarName,
-		"--listed-incremental=.gix/"+strconv.Itoa(lastFullTar)+".snar",
-		"~",
-	)
-	tar.Dir = repo.Location
-	if err := tar.Run(); err != nil {
-		panic(err)
-	}
-	commit := Commit{
-		Message:     message,
-		ZipLocation: tarName, //incremental tarball file name
-		Author:      "",
-		Date:        time.Now().Unix(),
-	}
-	repo.AddCommit(commit)
-}
-
-func Push() {
-	lastCommit := repo.Commits[len(repo.Commits)-1]
-
-	file, err := os.ReadFile(lastCommit.ZipLocation)
-	if err != nil {
-		panic(err)
-	}
-
-	client := resty.New()
-	defer client.Close()
-
-	//implementing this server-side is going to be tricky
-	//we should also send the incremental file (.snar) but i'll leave that to someone else
-	_, err = client.R().
-		SetBody(file).
-		SetHeaders(map[string]string{
-			"Authorization": "",
-			"Content-Type":  "application/octet-stream",
-			"Author":        "",
-			"Repo":          fmt.Sprintf("%s/%s", repo.Author, repo.Name),
-			"Filename":      lastCommit.ZipLocation,
-		}).
-		Post(settings.Server + "/push")
-	if err != nil {
-		panic(err)
-	}
-}
+var data = []string{"plik1", "plik2", "plik3"} // tu lista itemkow z kompa
 
 func main() {
-	a := app.New()
-	w := a.NewWindow("gix")
+	myApp := app.New()
+	makeTray(myApp)
 
-	commitMessage := widget.NewEntry()
-	loadedRepo := widget.NewLabel("")
+	myWindow := myApp.NewWindow("Form Widget")
+	FolderPathLabel := widget.NewLabel("nie wybrales folderu")
 
-	w.Resize(fyne.NewSize(800, 600))
-	w.SetContent(container.NewVBox(
-		container.NewVBox(
-			widget.NewLabel("Loaded repo: "),
-			loadedRepo,
-		),
-		commitMessage,
-		widget.NewButton("commit", func() {
-			CreateCommit(commitMessage.Text)
-		}),
-		widget.NewButton("open/init repo", func() {
-			folderDialog := dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
-				if !LoadRepo(uri.Path()) {
-					InitRepo(uri.Name(), uri.Path())
+	Commit := widget.NewEntry()
+	ComitArea := widget.NewMultiLineEntry()
+	RepoAea := widget.NewMultiLineEntry()
+	passwordArea := widget.NewPasswordEntry()
+	ChooseType := widget.NewLabel("Pick smth")
+	CheckAllPull := widget.NewButton("Check all", func() {})
+	CheckAllPush := widget.NewButton("Check all", func() {})
+	PullButn := widget.NewButton("Pull", func() {})
+	SaveButton := widget.NewButton("Save", func() { log.Println("Wysywa wartosc do serwera czy cos jakos wykminicie") })
+	var FOlderPath string
+	SelectFolderButton := widget.NewButton("Select Folder", func() {
+		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
+			if err != nil {
+				if err.Error() == "Cancelled" {
+					FolderPathLabel.SetText("Zostal wykonany cancell podczas wyboru folderu")
+				} else {
+					log.Println("Error Podczas wyboru folderu:", err)
+					FolderPathLabel.SetText("Error:" + err.Error())
 				}
-				loadedRepo.SetText(repo.Name)
-			}, w)
-			folderDialog.Show()
-		}),
-		widget.NewButton("push", func() {
-			Push()
-		}),
-	))
+				return
+			}
+			if uri == nil {
+				FolderPathLabel.SetText("Brak wybranego folderu")
+				return
+			}
+			FolderPathLabel.SetText(uri.Path())
+			fmt.Println("Wybrany folder to:", uri.Path())
+			FOlderPath = uri.Path()
+			log.Println(FOlderPath)
 
-	w.ShowAndRun()
+		}, myWindow)
+	})
+	ListOfitems := widget.NewList(
+		func() int {
+			return len(data)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("template")
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			o.(*widget.Label).SetText(data[i])
+		})
+
+	form := &widget.Form{
+		Items: []*widget.FormItem{
+			{
+				Text: "Name of Repo", Widget: RepoAea,
+			}, {
+				Text: "Password(if included)", Widget: passwordArea,
+			}},
+		OnSubmit: func() {
+			log.Println("Repo:", RepoAea.Text)
+			log.Println("Pasword:", passwordArea.Text)
+			myWindow.Close()
+		},
+	}
+	form.Hide()
+
+	YourRepo := widget.NewSelect([]string{"I tu ma ", "Wyswitlac epo"}, func(value string) {
+
+	})
+	YourRepo.Hide()
+
+	Choose := widget.NewSelect([]string{"Your Repo", "Public Repo"}, func(value string) {
+		if value == "Public Repo" {
+			YourRepo.Hide()
+			log.Println("Tu sie pojawia form")
+			form.Show()
+		} else {
+			form.Hide()
+			log.Println("Tu ma sie wypisywac przypisane repo")
+			YourRepo.Show()
+		}
+	})
+
+	PushCon := &widget.Form{
+		Items: []*widget.FormItem{
+			{
+				Text: "Verion", Widget: Commit,
+			},
+			{
+				Text: "Value of Commit", Widget: ComitArea,
+			}},
+		OnSubmit: func() {
+			log.Println("Version: ", Commit.Text)
+			log.Println("Commit: ", ComitArea.Text)
+		},
+	}
+
+	Pull := container.NewHSplit(ListOfitems, container.NewVBox(SelectFolderButton, FolderPathLabel, CheckAllPull, PullButn))
+	Push := container.NewHSplit(ListOfitems, container.NewVBox(PushCon, CheckAllPush))
+	Repositor := container.NewVBox(ChooseType, Choose, form, YourRepo, SaveButton)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Repository", Repositor),
+		container.NewTabItem("Pull", Pull),
+		container.NewTabItem("Push", Push),
+		container.NewTabItemWithIcon("settings", theme.SettingsIcon(), widget.NewLabel("Kiedy tu beda ustawienia konta itp ze z jakiego brancha bierzesz albo mozna to dac jako kolejnego taba")),
+	)
+
+	tabs.SetTabLocation(container.TabLocationTop)
+	Repositor.Position()
+	myWindow.CenterOnScreen()
+	myWindow.SetContent(tabs)
+	myWindow.Resize(fyne.NewSize(600, 350))
+	myWindow.ShowAndRun()
+}
+
+func makeTray(a fyne.App) {
+	if desk, ok := a.(desktop.App); ok {
+		h := fyne.NewMenuItem("Hello", func() {})
+		h.Icon = theme.HomeIcon()
+		menu := fyne.NewMenu("Hello World", h)
+		h.Action = func() {
+			log.Println("System tray menu tapped")
+			h.Label = "Welcome"
+			menu.Refresh()
+		}
+		desk.SetSystemTrayMenu(menu)
+	}
 }

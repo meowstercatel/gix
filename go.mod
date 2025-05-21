@@ -1,11 +1,8 @@
 module gix
 
-go 1.24.1
+go 1.24.2
 
-require (
-	fyne.io/fyne/v2 v2.6.0
-	resty.dev/v3 v3.0.0-beta.3
-)
+require fyne.io/fyne/v2 v2.6.0
 
 require (
 	fyne.io/systray v1.11.0 // indirect
